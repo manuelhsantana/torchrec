@@ -571,6 +571,10 @@ class BaseEmbeddingSharder(ModuleSharder[M]):
                     EmbeddingComputeKernel.SSD_VIRTUAL_TABLE.value,
                     EmbeddingComputeKernel.DRAM_VIRTUAL_TABLE.value,
                 ]
+            if compute_device_type in {"xpu"}:
+                ret += [
+                    EmbeddingComputeKernel.DENSE.value,
+                ]
         else:
             # TODO re-enable model parallel and dense
             ret += [

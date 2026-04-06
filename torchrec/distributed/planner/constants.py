@@ -111,11 +111,14 @@ def kernel_bw_lookup(
         ("cuda", EmbeddingComputeKernel.KEY_VALUE.value): ssd_mem_bw,
         ("cuda", EmbeddingComputeKernel.SSD_VIRTUAL_TABLE.value): hbm_to_ddr_mem_bw,
         ("cuda", EmbeddingComputeKernel.DRAM_VIRTUAL_TABLE.value): hbm_to_ddr_mem_bw,
+        # XPU — use CUDA-like HBM bandwidth estimates (Intel PVC has HBM)
+        ("xpu", EmbeddingComputeKernel.DENSE.value): 0.5 * hbm_mem_bw,
+        ("xpu", EmbeddingComputeKernel.FUSED.value): 1 * hbm_mem_bw,
     }
 
     if (
         prefetch_pipeline
-        and compute_device == "cuda"
+        and compute_device in ("cuda", "xpu")
         and compute_kernel == EmbeddingComputeKernel.FUSED_UVM_CACHING.value
     ):
         return lookup.get(("cuda", EmbeddingComputeKernel.FUSED.value))

@@ -589,7 +589,7 @@ class KernelConfig(TopologyConfigBase):
     def validate(self) -> None:
         """Validate kernel configuration parameters."""
         # Match Topology class validation: compute_device must be valid
-        valid_devices = {"cuda", "mtia", "cpu"}
+        valid_devices = {"cuda", "mtia", "cpu", "xpu"}
         if self.compute_device not in valid_devices:
             raise ValueError(
                 f"compute_device must be one of {valid_devices}, got '{self.compute_device}'"
@@ -815,6 +815,7 @@ class Topology:
             "cpu",
             "cuda",
             "mtia",
+            "xpu",
         ], f"unsupported compute device {compute_device}"
         if pod_size and pod_size > world_size:
             raise ValueError(
@@ -825,7 +826,7 @@ class Topology:
         self._world_size = world_size
 
         hbm_per_device = [0] * world_size
-        if self._compute_device == "cuda" or self._compute_device == "mtia":
+        if self._compute_device in ("cuda", "mtia", "xpu"):
             hbm_per_device = [hbm_cap if hbm_cap else HBM_CAP] * world_size
         ddr_cap_per_rank = [ddr_cap if ddr_cap else DDR_CAP] * world_size
         ssd_cap_per_rank = [ssd_cap if ssd_cap else SSD_CAP] * world_size

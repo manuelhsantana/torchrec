@@ -792,7 +792,7 @@ class ShardedEmbeddingBagCollection(
                     device_ids=(
                         [self._device]
                         if self._device is not None
-                        and (self._device.type in {"cuda", "mtia"})
+                        and (self._device.type in {"cuda", "mtia", "xpu"})
                         else None
                     ),
                     process_group=env.process_group,
