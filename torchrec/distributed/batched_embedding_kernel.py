@@ -2863,11 +2863,10 @@ class BatchedDenseEmbedding(BaseBatchedEmbedding[torch.Tensor]):
         weights_precision = data_type_to_sparse_type(config.data_type)
         fused_params = config.fused_params or {}
         output_dtype = fused_params.get("output_dtype", SparseType.FP32)
-        _xpu_device = device is not None and device.type == "xpu"
         use_cpu: bool = (
             device is None
             or device.type == "cpu"
-            or (not (_xpu_device or torch.cuda.is_available() or torch.mtia.is_available()))
+            or (not (torch.cuda.is_available() or torch.mtia.is_available() or torch.xpu.is_available()))
         )
         self._emb_module: DenseTableBatchedEmbeddingBagsCodegen = (
             DenseTableBatchedEmbeddingBagsCodegen(
@@ -4805,11 +4804,10 @@ class BatchedDenseEmbeddingBag(BaseBatchedEmbeddingBag[torch.Tensor]):
         weights_precision = data_type_to_sparse_type(config.data_type)
         fused_params = config.fused_params or {}
         output_dtype = fused_params.get("output_dtype", SparseType.FP32)
-        _xpu_device = device is not None and device.type == "xpu"
         use_cpu: bool = (
             device is None
             or device.type == "cpu"
-            or (not (_xpu_device or torch.cuda.is_available() or torch.mtia.is_available()))
+            or (not (torch.cuda.is_available() or torch.mtia.is_available() or torch.xpu.is_available()))
         )
         self._emb_module: DenseTableBatchedEmbeddingBagsCodegen = (
             DenseTableBatchedEmbeddingBagsCodegen(
