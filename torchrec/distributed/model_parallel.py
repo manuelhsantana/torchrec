@@ -183,10 +183,33 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
             params_and_buffers_to_ignore=ddp_ignore_param_names,
         )
         # initialize DDP
+        # DEBUG: check weights before .to(device) and DDP init
+        import sys as _sys
+        for _n, _p in dmp.named_parameters():
+            if hasattr(_p, 'data') and _p.dtype == torch.float16 and _p.numel() > 1000:
+                _nan = torch.isnan(_p).sum().item()
+                if _nan > 0:
+                    print(f"[DDP_WRAP] BEFORE .to(): NaN in {_n}: {_nan}/{_p.numel()} dev={_p.device}", file=_sys.stderr, flush=True)
+                    break
+        else:
+            print(f"[DDP_WRAP] BEFORE .to(): all fp16 params OK", file=_sys.stderr, flush=True)
+
+        _module_moved = dmp._dmp_wrapped_module.to(device)
+
+        # Check after .to(device)
+        for _n, _p in _module_moved.named_parameters():
+            if hasattr(_p, 'data') and _p.dtype == torch.float16 and _p.numel() > 1000:
+                _nan = torch.isnan(_p).sum().item()
+                if _nan > 0:
+                    print(f"[DDP_WRAP] AFTER .to(): NaN in {_n}: {_nan}/{_p.numel()} dev={_p.device}", file=_sys.stderr, flush=True)
+                    break
+        else:
+            print(f"[DDP_WRAP] AFTER .to(): all fp16 params OK", file=_sys.stderr, flush=True)
+
         dmp._dmp_wrapped_module = cast(
             nn.Module,
             DistributedDataParallel(
-                module=dmp._dmp_wrapped_module.to(device),
+                module=_module_moved,
                 device_ids=None if device.type == "cpu" else [device],
                 process_group=pg,
                 gradient_as_bucket_view=True,
@@ -197,6 +220,15 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
                 **self._ddp_kwargs,
             ),
         )
+        # DEBUG: check weights AFTER DDP init
+        for _n, _p in dmp.named_parameters():
+            if hasattr(_p, 'data') and _p.dtype == torch.float16 and _p.numel() > 1000:
+                _nan = torch.isnan(_p).sum().item()
+                if _nan > 0:
+                    print(f"[DDP_WRAP] AFTER DDP(): NaN in {_n}: {_nan}/{_p.numel()} dev={_p.device}", file=_sys.stderr, flush=True)
+                    break
+        else:
+            print(f"[DDP_WRAP] AFTER DDP(): all fp16 params OK", file=_sys.stderr, flush=True)
         if self._allreduce_comm_precision == "fp16":
             # pyrefly: ignore[not-callable]
             dmp._dmp_wrapped_module.register_comm_hook(

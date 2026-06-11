@@ -2885,6 +2885,27 @@ class BatchedDenseEmbedding(BaseBatchedEmbedding[torch.Tensor]):
             )
         )
         self.init_parameters()
+        # DEBUG: check for NaN after init
+        import sys as _sys
+        _nan_cnt = torch.isnan(self._emb_module.weights).sum().item()
+        print(f"[BatchedDenseEmbedding] init done: NaN={_nan_cnt}/{self._emb_module.weights.numel()} dev={self._emb_module.weights.device} dtype={self._emb_module.weights.dtype}", file=_sys.stderr, flush=True)
+        # Hook to detect weight corruption
+        self._orig_weight_data_ptr = self._emb_module.weights.data.data_ptr()
+        _orig_ptr = self._orig_weight_data_ptr
+        _orig_weights_ref = self._emb_module.weights
+        def _weight_hook(module, *args, **kwargs):
+            import sys as _sys2
+            w = _orig_weights_ref
+            cur_ptr = w.data.data_ptr()
+            if cur_ptr != _orig_ptr:
+                print(f"[BatchedDenseEmbedding] WEIGHT DATA_PTR CHANGED! {_orig_ptr} -> {cur_ptr}", file=_sys2.stderr, flush=True)
+            _nan = torch.isnan(w).sum().item()
+            if _nan > 0:
+                import traceback
+                print(f"[BatchedDenseEmbedding] WEIGHT NaN DETECTED: {_nan}/{w.numel()}", file=_sys2.stderr, flush=True)
+                traceback.print_stack(file=_sys2.stderr)
+                module._forward_pre_hooks.clear()  # remove hook after first detection
+        self.register_forward_pre_hook(_weight_hook)
 
     @property
     def emb_module(
@@ -2906,6 +2927,56 @@ class BatchedDenseEmbedding(BaseBatchedEmbedding[torch.Tensor]):
         yield append_prefix(prefix, f"{combined_key}.weight"), cast(
             nn.Parameter, self._emb_module.weights
         )
+
+    _debug_fwd_count: int = 0
+
+    def forward(self, features: "KeyedJaggedTensor") -> torch.Tensor:
+        import sys as _sys
+        BatchedDenseEmbedding._debug_fwd_count += 1
+        if BatchedDenseEmbedding._debug_fwd_count <= 2:
+            _wnan = torch.isnan(self._emb_module.weights).sum().item()
+            _idx = features.values()
+            _off = features.offsets()
+            _em = self._emb_module
+            print(f"[BatchedDenseEmbedding.forward #{BatchedDenseEmbedding._debug_fwd_count}] "
+                  f"weights NaN={_wnan}/{_em.weights.numel()} "
+                  f"weights.shape={_em.weights.shape} weights.dtype={_em.weights.dtype} "
+                  f"weights_offsets={_em.weights_offsets.tolist()} "
+                  f"D_offsets={_em.D_offsets.tolist()} "
+                  f"hash_size_cumsum={_em.hash_size_cumsum.tolist()} "
+                  f"total_hash_size_bits={_em.total_hash_size_bits} "
+                  f"max_D={_em.max_D} total_D={_em.total_D} "
+                  f"indices shape={_idx.shape} dtype={_idx.dtype} "
+                  f"offsets shape={_off.shape} dtype={_off.dtype} "
+                  f"indices range=[{_idx.min().item()}, {_idx.max().item()}] "
+                  f"device={_em.weights.device}",
+                  file=_sys.stderr, flush=True)
+        result = super().forward(features)
+        if BatchedDenseEmbedding._debug_fwd_count <= 2:
+            _rnan = torch.isnan(result).sum().item()
+            print(f"[BatchedDenseEmbedding.forward #{BatchedDenseEmbedding._debug_fwd_count}] "
+                  f"output NaN={_rnan}/{result.numel()} shape={result.shape} "
+                  f"is_contiguous={result.is_contiguous()} strides={result.stride()} "
+                  f"storage_offset={result.storage_offset()}",
+                  file=_sys.stderr, flush=True)
+            # Register a hook to inspect grad_output arriving at this tensor's backward
+            _fwd_count = BatchedDenseEmbedding._debug_fwd_count
+            def _emb_output_grad_hook(grad):
+                import sys as _sys2
+                try:
+                    torch.xpu.synchronize()
+                    print(f"[BatchedDenseEmbedding.backward #{_fwd_count}] "
+                          f"grad_output shape={grad.shape} dtype={grad.dtype} "
+                          f"is_contiguous={grad.is_contiguous()} "
+                          f"NaN={torch.isnan(grad).sum().item()}/{grad.numel()} "
+                          f"device={grad.device} XPU sync OK",
+                          file=_sys2.stderr, flush=True)
+                except Exception as e:
+                    print(f"[BatchedDenseEmbedding.backward #{_fwd_count}] ERROR: {e}",
+                          file=_sys2.stderr, flush=True)
+                return grad
+            result.register_hook(_emb_output_grad_hook)
+        return result
 
 
 class BaseBatchedEmbeddingBag(BaseEmbedding, Generic[SplitWeightType]):
