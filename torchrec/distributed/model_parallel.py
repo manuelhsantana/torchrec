@@ -183,28 +183,19 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
             params_and_buffers_to_ignore=ddp_ignore_param_names,
         )
         # initialize DDP
-        # DEBUG: check weights before .to(device) and DDP init
-        import sys as _sys
-        for _n, _p in dmp.named_parameters():
-            if hasattr(_p, 'data') and _p.dtype == torch.float16 and _p.numel() > 1000:
-                _nan = torch.isnan(_p).sum().item()
-                if _nan > 0:
-                    print(f"[DDP_WRAP] BEFORE .to(): NaN in {_n}: {_nan}/{_p.numel()} dev={_p.device}", file=_sys.stderr, flush=True)
-                    break
-        else:
-            print(f"[DDP_WRAP] BEFORE .to(): all fp16 params OK", file=_sys.stderr, flush=True)
-
         _module_moved = dmp._dmp_wrapped_module.to(device)
 
-        # Check after .to(device)
-        for _n, _p in _module_moved.named_parameters():
-            if hasattr(_p, 'data') and _p.dtype == torch.float16 and _p.numel() > 1000:
-                _nan = torch.isnan(_p).sum().item()
-                if _nan > 0:
-                    print(f"[DDP_WRAP] AFTER .to(): NaN in {_n}: {_nan}/{_p.numel()} dev={_p.device}", file=_sys.stderr, flush=True)
-                    break
-        else:
-            print(f"[DDP_WRAP] AFTER .to(): all fp16 params OK", file=_sys.stderr, flush=True)
+        # XPU workaround (FBGEMM_XPU_DISABLE_DDP_ALLREDUCE=1): skip DistributedDataParallel
+        # wrapping entirely on single-rank XPU runs. ProcessGroupXCCL::initXCCLComm()
+        # triggers MPIDI_GPU_init_mpl_global() inside Intel MPI 2021.16 which segfaults
+        # on this build for single-rank GPU collective init. With world_size == 1, DDP
+        # brings no benefit (no gradients to allreduce), so we keep the moved module
+        # as-is. See Dev/READMEs/debug-notes/dlrmv3-sigsegv-debug.md for the full bug
+        # report and gdb-oneapi backtrace.
+        import os as _os
+        if _os.environ.get("FBGEMM_XPU_DISABLE_DDP_ALLREDUCE") == "1":
+            dmp._dmp_wrapped_module = _module_moved
+            return
 
         dmp._dmp_wrapped_module = cast(
             nn.Module,
@@ -220,15 +211,7 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
                 **self._ddp_kwargs,
             ),
         )
-        # DEBUG: check weights AFTER DDP init
-        for _n, _p in dmp.named_parameters():
-            if hasattr(_p, 'data') and _p.dtype == torch.float16 and _p.numel() > 1000:
-                _nan = torch.isnan(_p).sum().item()
-                if _nan > 0:
-                    print(f"[DDP_WRAP] AFTER DDP(): NaN in {_n}: {_nan}/{_p.numel()} dev={_p.device}", file=_sys.stderr, flush=True)
-                    break
-        else:
-            print(f"[DDP_WRAP] AFTER DDP(): all fp16 params OK", file=_sys.stderr, flush=True)
+
         if self._allreduce_comm_precision == "fp16":
             # pyrefly: ignore[not-callable]
             dmp._dmp_wrapped_module.register_comm_hook(
