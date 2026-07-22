@@ -200,6 +200,8 @@ class ComputeDevice(Enum):
     CPU = "cpu"
     # MTIA compute device
     MTIA = "mtia"
+    # Intel XPU compute device
+    XPU = "xpu"
 
 
 @unique

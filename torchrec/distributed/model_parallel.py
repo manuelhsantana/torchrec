@@ -10,6 +10,7 @@
 import abc
 import copy
 import logging as logger
+import os
 from collections import defaultdict, OrderedDict
 from functools import wraps
 from typing import Any, Callable, cast, Dict, Iterator, List, Optional, Set, Tuple, Type
@@ -192,8 +193,9 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
         # brings no benefit (no gradients to allreduce), so we keep the moved module
         # as-is. See Dev/READMEs/debug-notes/dlrmv3-sigsegv-debug.md for the full bug
         # report and gdb-oneapi backtrace.
-        import os as _os
-        if _os.environ.get("FBGEMM_XPU_DISABLE_DDP_ALLREDUCE") == "1":
+        # TODO(upstream): remove once Intel MPI / XCCL fixes single-rank GPU collective
+        # init on this configuration. Upstream issue not yet filed (tracked internally).
+        if os.environ.get("FBGEMM_XPU_DISABLE_DDP_ALLREDUCE") == "1":
             dmp._dmp_wrapped_module = _module_moved
             return
 
@@ -1166,6 +1168,12 @@ class DMPCollection(DistributedModelParallel):
         submodule_configs: Optional[List[DMPCollectionConfig]] = None,
         rs_awaitable_hook_module: Optional[str] = None,
     ) -> None:
+        # NOTE: XPU is intentionally excluded here. DMPCollection implements 2D
+        # (hierarchical node-group) parallelism, which has not been validated on
+        # XPU; the single/multi-XPU flat-parallelism path (plain
+        # DistributedModelParallel, see FBGEMM_XPU_DISABLE_DDP_ALLREDUCE above)
+        # is the only XPU configuration exercised so far. Add "xpu" here only
+        # after 2D parallelism has been tested on XPU hardware.
         assert (
             device.type == "cuda" or device.type == "mtia"
         ), "DMPCollection only supports CUDA or MTIA"
