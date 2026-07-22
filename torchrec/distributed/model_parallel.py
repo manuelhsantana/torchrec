@@ -191,8 +191,7 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
         # triggers MPIDI_GPU_init_mpl_global() inside Intel MPI 2021.16 which segfaults
         # on this build for single-rank GPU collective init. With world_size == 1, DDP
         # brings no benefit (no gradients to allreduce), so we keep the moved module
-        # as-is. See Dev/READMEs/debug-notes/dlrmv3-sigsegv-debug.md for the full bug
-        # report and gdb-oneapi backtrace.
+        # as-is.
         # TODO(upstream): remove once Intel MPI / XCCL fixes single-rank GPU collective
         # init on this configuration. Upstream issue not yet filed (tracked internally).
         if os.environ.get("FBGEMM_XPU_DISABLE_DDP_ALLREDUCE") == "1":
