@@ -567,7 +567,9 @@ class BaseEmbeddingSharder(ModuleSharder[M]):
         sharding_type: str,
         compute_device_type: str,
     ) -> List[str]:
-        # XPU: only DENSE kernel (FUSED/TBE requires fbgemm ops not available on XPU).
+        # XPU: only DENSE kernel validated so far. FUSED/TBE ops exist in the
+        # fbgemm-xpu (torchlib-xpu) package but the end-to-end training path
+        # has not been tested on XPU hardware; revisit once validated.
         if compute_device_type in {"xpu"}:
             return [EmbeddingComputeKernel.DENSE.value]
 

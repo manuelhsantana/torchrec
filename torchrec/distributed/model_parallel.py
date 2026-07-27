@@ -183,12 +183,10 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
             params_and_buffers_to_ignore=ddp_ignore_param_names,
         )
         # initialize DDP
-        _module_moved = dmp._dmp_wrapped_module.to(device)
-
         dmp._dmp_wrapped_module = cast(
             nn.Module,
             DistributedDataParallel(
-                module=_module_moved,
+                module=dmp._dmp_wrapped_module.to(device),
                 device_ids=None if device.type == "cpu" else [device],
                 process_group=pg,
                 gradient_as_bucket_view=True,
@@ -1157,9 +1155,9 @@ class DMPCollection(DistributedModelParallel):
         # NOTE: XPU is intentionally excluded here. DMPCollection implements 2D
         # (hierarchical node-group) parallelism, which has not been validated on
         # XPU; the single/multi-XPU flat-parallelism path (plain
-        # DistributedModelParallel, see FBGEMM_XPU_DISABLE_DDP_ALLREDUCE above)
-        # is the only XPU configuration exercised so far. Add "xpu" here only
-        # after 2D parallelism has been tested on XPU hardware.
+        # DistributedModelParallel) is the only XPU configuration exercised so
+        # far. Add "xpu" here only after 2D parallelism has been tested on XPU
+        # hardware.
         assert (
             device.type == "cuda" or device.type == "mtia"
         ), "DMPCollection only supports CUDA or MTIA"
