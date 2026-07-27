@@ -2912,9 +2912,6 @@ class BatchedDenseEmbedding(BaseBatchedEmbedding[torch.Tensor]):
             nn.Parameter, self._emb_module.weights
         )
 
-    def forward(self, features: "KeyedJaggedTensor") -> torch.Tensor:
-        return super().forward(features)
-
 
 class BaseBatchedEmbeddingBag(BaseEmbedding, Generic[SplitWeightType]):
     def __init__(

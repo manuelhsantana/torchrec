@@ -10,7 +10,6 @@
 import abc
 import copy
 import logging as logger
-import os
 from collections import defaultdict, OrderedDict
 from functools import wraps
 from typing import Any, Callable, cast, Dict, Iterator, List, Optional, Set, Tuple, Type
@@ -185,18 +184,6 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
         )
         # initialize DDP
         _module_moved = dmp._dmp_wrapped_module.to(device)
-
-        # XPU workaround (FBGEMM_XPU_DISABLE_DDP_ALLREDUCE=1): skip DistributedDataParallel
-        # wrapping entirely on single-rank XPU runs. ProcessGroupXCCL::initXCCLComm()
-        # triggers MPIDI_GPU_init_mpl_global() inside Intel MPI 2021.16 which segfaults
-        # on this build for single-rank GPU collective init. With world_size == 1, DDP
-        # brings no benefit (no gradients to allreduce), so we keep the moved module
-        # as-is.
-        # TODO(upstream): remove once Intel MPI / XCCL fixes single-rank GPU collective
-        # init on this configuration. Upstream issue not yet filed (tracked internally).
-        if os.environ.get("FBGEMM_XPU_DISABLE_DDP_ALLREDUCE") == "1":
-            dmp._dmp_wrapped_module = _module_moved
-            return
 
         dmp._dmp_wrapped_module = cast(
             nn.Module,
