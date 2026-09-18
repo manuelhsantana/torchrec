@@ -2890,7 +2890,7 @@ class BatchedDenseEmbedding(BaseBatchedEmbedding[torch.Tensor]):
         use_cpu: bool = (
             device is None
             or device.type == "cpu"
-            or (not (torch.cuda.is_available() or torch.mtia.is_available()))
+            or (not (torch.cuda.is_available() or torch.mtia.is_available() or torch.xpu.is_available()))
         )
         self._emb_module: DenseTableBatchedEmbeddingBagsCodegen = (
             DenseTableBatchedEmbeddingBagsCodegen(
@@ -2930,6 +2930,9 @@ class BatchedDenseEmbedding(BaseBatchedEmbedding[torch.Tensor]):
         yield append_prefix(prefix, f"{combined_key}.weight"), cast(
             nn.Parameter, self._emb_module.weights
         )
+
+    def forward(self, features: "KeyedJaggedTensor") -> torch.Tensor:
+        return super().forward(features)
 
 
 class BaseBatchedEmbeddingBag(BaseEmbedding, Generic[SplitWeightType]):
@@ -4670,7 +4673,7 @@ class BatchedDenseEmbeddingBag(BaseBatchedEmbeddingBag[torch.Tensor]):
         use_cpu: bool = (
             device is None
             or device.type == "cpu"
-            or (not (torch.cuda.is_available() or torch.mtia.is_available()))
+            or (not (torch.cuda.is_available() or torch.mtia.is_available() or torch.xpu.is_available()))
         )
         self._emb_module: DenseTableBatchedEmbeddingBagsCodegen = (
             DenseTableBatchedEmbeddingBagsCodegen(

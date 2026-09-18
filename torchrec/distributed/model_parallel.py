@@ -178,10 +178,24 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
             params_and_buffers_to_ignore=ddp_ignore_param_names,
         )
         # initialize DDP
+        _module_moved = dmp._dmp_wrapped_module.to(device)
+
+        # XPU workaround (FBGEMM_XPU_DISABLE_DDP_ALLREDUCE=1): skip DistributedDataParallel
+        # wrapping entirely on single-rank XPU runs. ProcessGroupXCCL::initXCCLComm()
+        # triggers MPIDI_GPU_init_mpl_global() inside Intel MPI 2021.16 which segfaults
+        # on this build for single-rank GPU collective init. With world_size == 1, DDP
+        # brings no benefit (no gradients to allreduce), so we keep the moved module
+        # as-is. See Dev/READMEs/debug-notes/dlrmv3-sigsegv-debug.md for the full bug
+        # report and gdb-oneapi backtrace.
+        import os as _os
+        if _os.environ.get("FBGEMM_XPU_DISABLE_DDP_ALLREDUCE") == "1":
+            dmp._dmp_wrapped_module = _module_moved
+            return
+
         dmp._dmp_wrapped_module = cast(
             nn.Module,
             DistributedDataParallel(
-                module=dmp._dmp_wrapped_module.to(device),
+                module=_module_moved,
                 device_ids=None if device.type == "cpu" else [device],
                 process_group=pg,
                 gradient_as_bucket_view=True,
@@ -192,6 +206,7 @@ class DefaultDataParallelWrapper(DataParallelWrapper):
                 **self._ddp_kwargs,
             ),
         )
+
         if self._allreduce_comm_precision == "fp16":
             # pyre-fixme[29]: `Union[Module, Tensor]` is not a function.
             dmp._dmp_wrapped_module.register_comm_hook(
