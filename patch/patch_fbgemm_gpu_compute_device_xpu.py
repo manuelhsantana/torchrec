@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch fbgemm_gpu-cpu (1.7.0) to add a `ComputeDevice.XPU` enum member.
+"""Patch fbgemm_gpu-cpu to add a `ComputeDevice.XPU` enum member.
 
 torchrec's BatchedFusedEmbedding/BatchedFusedEmbeddingBag reference
 `ComputeDevice.XPU` directly (see
