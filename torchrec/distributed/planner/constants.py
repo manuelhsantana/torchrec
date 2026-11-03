@@ -124,6 +124,7 @@ def kernel_bw_lookup(
         # XPU
         ("xpu", EmbeddingComputeKernel.DENSE.value): 0.5 * hbm_mem_bw,
         ("xpu", EmbeddingComputeKernel.FUSED.value): 1 * hbm_mem_bw,
+        ("xpu", EmbeddingComputeKernel.QUANT.value): 1 * hbm_mem_bw,
     }
 
     if (
